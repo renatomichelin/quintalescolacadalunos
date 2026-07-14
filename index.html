@@ -826,7 +826,15 @@ async function loadFromSupabase(){
       .select('*')
       .order('nome');
     if(error) throw error;
-    if(!data||!data.length){ document.getElementById('loading').classList.remove('on'); return false; }
+
+    // Conectado com sucesso: marca a fonte como Supabase mesmo que a tabela
+    // ainda esteja vazia (ex.: antes da primeira importação). Sem isso, o
+    // app nunca soube que estava "no Supabase" e tratava a importação
+    // seguinte como algo só local, que sumia ao recarregar a página.
+    DATA_SOURCE='supabase';
+    atualizarFonteDados();
+
+    if(!data||!data.length){ DB.length=0; document.getElementById('loading').classList.remove('on'); return true; }
 
     // Mapear colunas Supabase -> DB local
     DB.length=0;
@@ -851,8 +859,6 @@ async function loadFromSupabase(){
       DB.push(obj);
     });
 
-    DATA_SOURCE='supabase';
-    atualizarFonteDados();
     document.getElementById('loading').classList.remove('on');
     return true;
   }catch(e){
