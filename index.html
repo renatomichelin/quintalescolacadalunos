@@ -1920,10 +1920,13 @@ function onFile(inp){
   r.onerror=()=>{document.getElementById('loading').classList.remove('on');toast('Erro ao ler arquivo','err');};
   r.onload=e=>{
     try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true,raw:false,dateNF:'dd/mm/yyyy'});
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true,raw:true,dateNF:'dd/mm/yyyy'});
       const sn=wb.SheetNames.find(n=>n.toLowerCase().includes('base'))||wb.SheetNames[0];
       const ws=wb.Sheets[sn];
-      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false,dateNF:'dd/mm/yyyy'});
+      // raw:true faz células numéricas (ex.: valor) virem números de verdade,
+      // em vez de texto formatado — que sai em separador americano (1,385.00)
+      // e é mal interpretado pelo pnum(), que espera separador brasileiro.
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,dateNF:'dd/mm/yyyy'});
       // Find header row
       let hIdx=raw.findIndex(r=>r.some(c=>String(c||'').toUpperCase().includes('NOME DO ALUNO')));
       if(hIdx<0) hIdx=1;
