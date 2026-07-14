@@ -1728,7 +1728,7 @@ function buildIngresso(){
 // ══════════════════════════════════════
 // CONTATOS
 // ══════════════════════════════════════
-let cFil=[],cPg=1;
+let cFil=[];
 function buildContatos(){
   filtrarContatos();
 }
@@ -1746,13 +1746,12 @@ function filtrarContatos(){
     if(t&&a.turma!==t) return false;
     return true;
   });
-  cPg=1;
   renderContatos();
 }
 function renderContatos(){
   const tot=cFil.length;
   document.getElementById('c-cnt').textContent=tot+' contato'+(tot!==1?'s':'');
-  const sl=cFil.slice((cPg-1)*30,cPg*30);
+  const sl=cFil; // lista completa, sem paginação — rolagem no container
   document.getElementById('c-body').innerHTML=sl.map(a=>{
     const stCh=a.status==='Ativo'?`<span class="chip chip-ativo">Ativo</span>`:`<span class="chip chip-inativo">${a.status||'—'}</span>`;
     return`<tr>
@@ -1774,7 +1773,7 @@ function renderContatos(){
       </td>
     </tr>`;
   }).join('');
-  renderPag('c-pag',cPg,Math.max(1,Math.ceil(cFil.length/30)),p=>{cPg=p;renderContatos();});
+  document.getElementById('c-pag').innerHTML='';
 }
 function exportContatos(){
   const rows=cFil.map(a=>({
