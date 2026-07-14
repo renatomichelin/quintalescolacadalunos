@@ -606,7 +606,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px 8px;border-bottom:1px solid var(--border-l);background:var(--card);">
         <span class="toolbar-title">Lista Completa</span>
         <div style="display:flex;align-items:center;gap:8px;">
-          <div class="srch"><span class="srch-ico">⌕</span><input type="text" id="l-q" placeholder="Buscar por nome ou responsável…" oninput="filtrarLista()"></div>
+          <div class="srch"><span class="srch-ico">⌕</span><input type="text" id="l-q" placeholder="Buscar por nome ou responsáveis…" oninput="filtrarLista()"></div>
           <span class="cnt" id="l-cnt"></span>
           <button class="btn-csv" onclick="exportLista()">↓ Excel</button>
         </div>
@@ -693,7 +693,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--border-l);background:var(--card);">
         <span class="toolbar-title">Agenda de Responsáveis</span>
         <div style="display:flex;align-items:center;gap:8px;">
-          <div class="srch"><span class="srch-ico">⌕</span><input type="text" id="c-q" placeholder="Buscar por nome ou responsável…" oninput="filtrarContatos()"></div>
+          <div class="srch"><span class="srch-ico">⌕</span><input type="text" id="c-q" placeholder="Buscar por nome ou responsáveis…" oninput="filtrarContatos()"></div>
           <span class="cnt" id="c-cnt"></span>
           <button class="btn-csv" onclick="exportContatos()">↓ Excel</button>
         </div>
@@ -1513,7 +1513,7 @@ function filtrarLista(){
   // Base filtrada por status e busca (sem filtros de campo)
   const base=DB.filter(a=>{
     if(st&&a.status!==st) return false;
-    if(q&&!a.nome.toLowerCase().includes(q)&&!(a.resp1||'').toLowerCase().includes(q)) return false;
+    if(q&&!a.nome.toLowerCase().includes(q)&&!(a.resp1||'').toLowerCase().includes(q)&&!(a.resp2||'').toLowerCase().includes(q)) return false;
     return true;
   });
 
@@ -1738,7 +1738,7 @@ function filtrarContatos(){
   const t=document.getElementById('c-turma').value;
   const base=DB.filter(a=>{
     if(st&&a.status!==st) return false;
-    if(q&&!a.nome.toLowerCase().includes(q)&&!(a.resp1||'').toLowerCase().includes(q)) return false;
+    if(q&&!a.nome.toLowerCase().includes(q)&&!(a.resp1||'').toLowerCase().includes(q)&&!(a.resp2||'').toLowerCase().includes(q)) return false;
     return true;
   });
   popSelSmart('c-turma', DB, 'turma', 'Turma', base);
