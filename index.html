@@ -345,11 +345,11 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
         </div>
         <div class="form-group">
           <label class="form-label">CPF</label>
-          <input class="form-input" id="f-cpf" type="text" placeholder="000.000.000-00">
+          <input class="form-input" id="f-cpf" type="text" placeholder="000.000.000-00" maxlength="14" inputmode="numeric" oninput="this.value=maskCPF(this.value)">
         </div>
         <div class="form-group">
           <label class="form-label">Celular</label>
-          <input class="form-input" id="f-fone" type="tel" placeholder="(11) 99999-9999">
+          <input class="form-input" id="f-fone" type="tel" placeholder="(11) 99999-9999" maxlength="15" inputmode="numeric" oninput="this.value=maskFone(this.value)">
         </div>
         <div class="form-group">
           <label class="form-label">E-mail</label>
@@ -374,7 +374,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
         </div>
         <div class="form-group">
           <label class="form-label">Celular</label>
-          <input class="form-input" id="f-fone2" type="tel" placeholder="(11) 99999-9999">
+          <input class="form-input" id="f-fone2" type="tel" placeholder="(11) 99999-9999" maxlength="15" inputmode="numeric" oninput="this.value=maskFone(this.value)">
         </div>
         <div class="form-group span2"><div class="form-section">Observações</div></div>
         <div class="form-group span2">
@@ -1815,6 +1815,25 @@ function renderPag(elId,cur,tot,cb){
 function pgR(c,t){if(t<=7)return Array.from({length:t},(_,i)=>i+1);if(c<=4)return[1,2,3,4,5,'…',t];if(c>=t-3)return[1,'…',t-4,t-3,t-2,t-1,t];return[1,'…',c-1,c,c+1,'…',t];}
 
 // ══════════════════════════════════════
+// MÁSCARAS (CPF / Telefone)
+// ══════════════════════════════════════
+function maskCPF(v){
+  v = String(v||'').replace(/\D/g,'').slice(0,11);
+  if(v.length<=3) return v;
+  if(v.length<=6) return v.slice(0,3)+'.'+v.slice(3);
+  if(v.length<=9) return v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);
+  return v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);
+}
+function maskFone(v){
+  v = String(v||'').replace(/\D/g,'').slice(0,11);
+  if(v.length===0) return '';
+  if(v.length<=2) return '('+v;
+  if(v.length<=6) return '('+v.slice(0,2)+') '+v.slice(2);
+  if(v.length<=10) return '('+v.slice(0,2)+') '+v.slice(2,6)+'-'+v.slice(6);
+  return '('+v.slice(0,2)+') '+v.slice(2,7)+'-'+v.slice(7);
+}
+
+// ══════════════════════════════════════
 // MODAL CADASTRO
 // ══════════════════════════════════════
 let _editIdx = -1;
@@ -1835,14 +1854,14 @@ function openModal(idx=-1){
   set('f-nasc',    a?.nasc    || '');
   set('f-inicio',  a?.inicio  || '');
   set('f-resp1',   a?.resp1   || '');
-  set('f-cpf',     a?.cpf     || '');
-  set('f-fone',    a?.fone    || '');
+  set('f-cpf',     maskCPF(a?.cpf   || ''));
+  set('f-fone',    maskFone(a?.fone || ''));
   set('f-email1',  a?.email1  || '');
   set('f-cep',     a?.cep     || '');
   set('f-end',     a?.end     || '');
   set('f-resp2',   a?.resp2   || '');
   set('f-email2',  a?.email2  || '');
-  set('f-fone2',   a?.fone2   || '');
+  set('f-fone2',   maskFone(a?.fone2 || ''));
   set('f-obs',     a?.obs     || '');
   document.getElementById('modal-overlay').classList.add('on');
 }
