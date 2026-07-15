@@ -234,6 +234,31 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 #toast.warn{background:var(--amber);}
 @media(max-width:1100px){.g4{grid-template-columns:repeat(2,1fr);}.g5{grid-template-columns:repeat(3,1fr);}.g21{grid-template-columns:1fr;}}
 @media(max-width:800px){.g2,.g3{grid-template-columns:1fr;}}
+
+/* MOBILE */
+#menu-toggle{display:none;width:34px;height:34px;flex-shrink:0;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);font-size:16px;line-height:1;cursor:pointer;align-items:center;justify-content:center;}
+#sb-backdrop{display:none;position:fixed;inset:0;background:rgba(10,25,15,.45);z-index:290;}
+#sb-backdrop.on{display:block;}
+@media(max-width:860px){
+  #sb{transform:translateX(-100%);transition:transform .22s ease;}
+  #sb.open{transform:translateX(0);}
+  #tb{left:0;padding:0 14px;}
+  #main{margin-left:0;}
+  .page{padding:14px 14px 40px;}
+  #menu-toggle{display:flex;}
+  .tb-r{display:none;} /* mesmas ações já disponíveis no menu (☰) */
+  .g4{grid-template-columns:repeat(2,1fr);}
+  .g5{grid-template-columns:repeat(2,1fr);}
+  .form-grid{grid-template-columns:1fr;}
+  .toolbar-title{flex:1 1 100%;}
+  .modal{width:100%;}
+  .login-card{padding:26px 22px;}
+}
+@media(max-width:480px){
+  .g4,.g5,.prof-grid{grid-template-columns:1fr 1fr;}
+  .kpi-v{font-size:19px;}
+  .modal-body,.card-body{padding-left:12px;padding-right:12px;}
+}
 /* LOGIN */
 #login-screen{display:none;position:fixed;inset:0;background:var(--green);z-index:1000;align-items:center;justify-content:center;}
 #login-screen.on{display:flex;}
@@ -276,11 +301,11 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-group span2"><div class="form-section">Dados do Aluno</div></div>
-        <div class="form-group" style="grid-column:1/2">
+        <div class="form-group">
           <label class="form-label">Nome Completo *</label>
           <input class="form-input" id="f-nome" type="text" placeholder="Nome completo">
         </div>
-        <div class="form-group" style="grid-column:2/3">
+        <div class="form-group">
           <label class="form-label">RA (Registro do Aluno)</label>
           <input class="form-input" id="f-ra" type="text" placeholder="Ex: 234">
         </div>
@@ -358,7 +383,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
         </div>
         <div class="form-group">
           <label class="form-label">CEP</label>
-          <input class="form-input" id="f-cep" type="text" placeholder="00000-000">
+          <input class="form-input" id="f-cep" type="text" placeholder="00000-000" maxlength="9" inputmode="numeric" oninput="this.value=maskCEP(this.value)">
         </div>
         <div class="form-group span2">
           <label class="form-label">Endereço</label>
@@ -459,10 +484,14 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 </nav>
 
 <!-- TOPBAR -->
+<div id="sb-backdrop" onclick="closeSidebar()"></div>
 <div id="tb" style="display:none">
-  <div class="tb-l">
-    <div id="tb-title">Visão Geral</div>
-    <div id="tb-sub">Carregando…</div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button id="menu-toggle" onclick="toggleSidebar()" aria-label="Abrir menu">☰</button>
+    <div class="tb-l">
+      <div id="tb-title">Visão Geral</div>
+      <div id="tb-sub">Carregando…</div>
+    </div>
   </div>
   <div class="tb-r">
     <button class="btn-secondary" onclick="document.getElementById('fin').click()">↑ Carregar planilha</button>
@@ -603,15 +632,15 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 <div id="p-lista" class="page">
   <div class="card">
     <div style="display:flex;flex-direction:column;">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px 8px;border-bottom:1px solid var(--border-l);background:var(--card);">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:8px 14px 8px;border-bottom:1px solid var(--border-l);background:var(--card);">
         <span class="toolbar-title">Lista Completa</span>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="srch"><span class="srch-ico">⌕</span><input type="text" id="l-q" placeholder="Buscar por nome ou responsáveis…" oninput="filtrarLista()"></div>
           <span class="cnt" id="l-cnt"></span>
           <button class="btn-csv" onclick="exportLista()">↓ Excel</button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border-l);background:var(--card);">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--border-l);background:var(--card);">
         <div class="fbar-group fbar-group-status" style="border-right:2px solid var(--border-l);border-radius:0;">
           <span class="fbar-label">Exibir</span>
           <div class="status-switch" id="l-sw">
@@ -690,15 +719,15 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 <div id="p-contatos" class="page">
   <div class="card">
     <div style="display:flex;flex-direction:column;">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--border-l);background:var(--card);">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border-l);background:var(--card);">
         <span class="toolbar-title">Agenda de Responsáveis</span>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="srch"><span class="srch-ico">⌕</span><input type="text" id="c-q" placeholder="Buscar por nome ou responsáveis…" oninput="filtrarContatos()"></div>
           <span class="cnt" id="c-cnt"></span>
           <button class="btn-csv" onclick="exportContatos()">↓ Excel</button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border-l);background:var(--card);">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--border-l);background:var(--card);">
         <div class="fbar-group fbar-group-status" style="border-right:2px solid var(--border-l);border-radius:0;">
           <span class="fbar-label">Exibir</span>
           <div class="status-switch" id="c-sw">
@@ -801,7 +830,7 @@ async function handleLogout(){
 async function initAuth(){
   document.getElementById('loading').classList.add('on');
   initSupabase();
-  if(!supaClient){ showLogin('Supabase não configurado. Defina SUPA_URL e SUPA_KEY no início do &lt;script&gt;.'); return; }
+  if(!supaClient){ showLogin('Supabase não configurado. Defina SUPA_URL e SUPA_KEY no início do <script>.'); return; }
 
   supaClient.auth.onAuthStateChange((event, session)=>{
     if(event==='SIGNED_OUT'){ currentUser=null; DB.length=0; DATA_SOURCE='local'; showLogin(); }
@@ -1173,6 +1202,19 @@ function nav(id,btn){
   const m=META[id]||{};
   document.getElementById('tb-title').textContent=m.t||id;
   document.getElementById('tb-sub').textContent=m.s||'';
+  closeSidebar();
+}
+
+// ══════════════════════════════════════
+// MENU MOBILE (sidebar em off-canvas)
+// ══════════════════════════════════════
+function toggleSidebar(){
+  document.getElementById('sb').classList.toggle('open');
+  document.getElementById('sb-backdrop').classList.toggle('on');
+}
+function closeSidebar(){
+  document.getElementById('sb').classList.remove('open');
+  document.getElementById('sb-backdrop').classList.remove('on');
 }
 
 // ══════════════════════════════════════
@@ -1474,6 +1516,7 @@ function buildFinanceiro(){
 // ══════════════════════════════════════
 const L_COLS=[
   {k:'nome',l:'Nome'},
+  {k:'_acoes',l:'Ações'},
   {k:'ra',l:'RA'},
   {k:'status',l:'Status'},
   {k:'turma',l:'Turma'},
@@ -1494,7 +1537,6 @@ const L_COLS=[
   {k:'fone2',l:'Cel. 2'},
   {k:'end',l:'Endereço'},
   {k:'obs',l:'Obs.'},
-  {k:'_acoes',l:'Ações'},
 ];
 let lFil=[],lSC=-1,lSD=1;
 
@@ -1553,6 +1595,10 @@ function renderLista(){
       const pCh=a.pagto?`<span class="chip ${a.pagto==='PIX'?'ch-g':'ch-a'}">${a.pagto}</span>`:'—';
       return`<tr>
         <td class="td-n" title="${a.nome||''}">${(a.nome||'—').substring(0,30)+((a.nome||'').length>30?'…':'')}</td>
+        <td class="td-acoes">
+          <button class="btn-acao btn-edit" onclick="editarAluno(${DB.indexOf(a)})" title="Editar">✎ Editar</button>
+          <button class="btn-acao btn-del" onclick="excluirAluno(${DB.indexOf(a)})" title="Excluir">✕</button>
+        </td>
         <td style="font-size:10px;font-weight:700;color:var(--muted)">${a.ra||'—'}</td>
         <td>${stCh}</td>
         <td>${tCh}</td>
@@ -1573,10 +1619,6 @@ function renderLista(){
         <td>${a.fone2||a.fone_res2||'—'}</td>
         <td title="${a.end||''}">${(a.end||'—').substring(0,20)+((a.end||'').length>20?'…':'')}</td>
         <td title="${a.obs||''}">${(a.obs||'—').substring(0,20)+((a.obs||'').length>20?'…':'')}</td>
-        <td class="td-acoes">
-          <button class="btn-acao btn-edit" onclick="editarAluno(${DB.indexOf(a)})" title="Editar">✎ Editar</button>
-          <button class="btn-acao btn-del" onclick="excluirAluno(${DB.indexOf(a)})" title="Excluir">✕</button>
-        </td>
       </tr>`;
     }).join('');
   }
@@ -1829,6 +1871,11 @@ function maskFone(v){
   if(v.length<=10) return '('+v.slice(0,2)+') '+v.slice(2,6)+'-'+v.slice(6);
   return '('+v.slice(0,2)+') '+v.slice(2,7)+'-'+v.slice(7);
 }
+function maskCEP(v){
+  v = String(v||'').replace(/\D/g,'').slice(0,8);
+  if(v.length<=5) return v;
+  return v.slice(0,5)+'-'+v.slice(5);
+}
 
 // ══════════════════════════════════════
 // MODAL CADASTRO
@@ -1854,7 +1901,7 @@ function openModal(idx=-1){
   set('f-cpf',     maskCPF(a?.cpf   || ''));
   set('f-fone',    maskFone(a?.fone || ''));
   set('f-email1',  a?.email1  || '');
-  set('f-cep',     a?.cep     || '');
+  set('f-cep',     maskCEP(a?.cep || ''));
   set('f-end',     a?.end     || '');
   set('f-resp2',   a?.resp2   || '');
   set('f-email2',  a?.email2  || '');
