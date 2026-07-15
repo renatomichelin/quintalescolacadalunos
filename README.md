@@ -7,10 +7,12 @@ armazenados no [Supabase](https://supabase.com) e publicação no
 ## Estrutura
 
 ```
-index.html            → aplicação completa (front-end estático)
-netlify.toml           → configuração de deploy no Netlify
-supabase/schema.sql     → estrutura da tabela `alunos` + segurança (RLS)
-supabase/seed_alunos.sql → carga inicial com os 232 registros já existentes
+index.html                  → aplicação completa (front-end estático)
+netlify.toml                → configuração de deploy no Netlify
+supabase/schema.sql          → estrutura da tabela `alunos` + segurança (RLS)
+supabase/seed_alunos.sql     → carga inicial com os 232 registros já existentes
+supabase/schema_listas.sql   → tabelas de Turmas+Professor, Períodos e Formas
+                                de Pagamento (gerenciáveis em Configurações)
 ```
 
 Este repositório é **privado** porque `supabase/seed_alunos.sql` contém dados
@@ -24,11 +26,16 @@ Estes passos usam o **SQL Editor** do painel do Supabase
 
 1. Rode todo o conteúdo de `supabase/schema.sql`.
 2. Rode todo o conteúdo de `supabase/seed_alunos.sql` (carrega os 232 alunos).
-3. Em `Authentication → Users → Add user`, crie um usuário (e-mail + senha)
+3. Rode todo o conteúdo de `supabase/schema_listas.sql` (cria as tabelas de
+   Turmas, Períodos e Formas de Pagamento usadas no formulário de aluno).
+   Depois, abra o app → **Configurações** e preencha o professor(a) de cada
+   turma (a lista já vem com os 5 nomes de turma que o sistema usava, mas
+   sem professor vinculado — isso não dá pra descobrir automaticamente).
+4. Em `Authentication → Users → Add user`, crie um usuário (e-mail + senha)
    para cada pessoa da equipe que vai acessar o sistema. É esse login que
    protege os dados — sem ele, ninguém consegue ler ou editar a tabela
    `alunos` (a RLS criada no passo 1 exige usuário autenticado).
-4. Em `Settings → API`, copie:
+5. Em `Settings → API`, copie:
    - **Project URL**
    - **anon / public key**
 
