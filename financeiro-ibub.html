@@ -153,6 +153,7 @@ a{color:inherit;}
 .card-head span{font-size:11.5px;color:var(--muted);}
 .chart-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:16px;margin-bottom:16px;}
 .chart-grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.bank-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:20px;align-items:center;}
 .chart-box{position:relative;height:260px;}
 .chart-box.tall{height:300px;}
 .legend-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;justify-content:center;}
@@ -172,6 +173,8 @@ table.simple tr:last-child td{border-bottom:none;}
 
 /* ===== DRE TABLE ===== */
 .dre-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.dre-sort-label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--ink-2);}
+.dre-sort-select{border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12.5px;color:var(--ink);background:#fff;font-weight:600;}
 #dreWrap{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:auto;max-height:70vh;}
 table.dre{border-collapse:collapse;width:100%;font-size:12.5px;min-width:720px;}
 table.dre thead th{position:sticky;top:0;background:var(--purple-900);color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;padding:11px 12px;text-align:right;white-space:nowrap;z-index:5;}
@@ -251,6 +254,7 @@ table.dre tbody tr:hover td:first-child{background:var(--purple-50);}
   .kpi-grid{grid-template-columns:repeat(2,1fr);}
   .chart-grid{grid-template-columns:1fr;}
   .chart-grid2{grid-template-columns:1fr;}
+  .bank-grid{grid-template-columns:1fr;}
   .rs-charts{grid-template-columns:1fr;}
   .rs-tables{grid-template-columns:1fr;}
 }
@@ -436,12 +440,15 @@ table.dre tbody tr:hover td:first-child{background:var(--purple-50);}
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>Últimos Lançamentos</h3><span id="lancCount"></span></div>
-          <div style="overflow-x:auto;">
-            <table class="simple" id="tblRecentes">
-              <thead><tr><th>Data</th><th>Tipo</th><th>Grupo 1</th><th>Descrição</th><th style="text-align:right;">Valor</th></tr></thead>
-              <tbody></tbody>
-            </table>
+          <div class="card-head"><h3>Movimentação por Banco</h3><span id="bankCount"></span></div>
+          <div class="bank-grid">
+            <div class="chart-box tall"><canvas id="chBancos"></canvas></div>
+            <div style="overflow-x:auto;">
+              <table class="simple" id="tblBancos">
+                <thead><tr><th>Banco</th><th style="text-align:right;">Receitas</th><th style="text-align:right;">Despesas</th><th style="text-align:right;">Resultado</th><th style="text-align:right;">Qtd.</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -461,6 +468,14 @@ table.dre tbody tr:hover td:first-child{background:var(--purple-50);}
         <div class="dre-toolbar">
           <button class="btn btn-secondary btn-sm" id="btnExpandAll">Expandir tudo</button>
           <button class="btn btn-ghost btn-sm" id="btnCollapseAll">Recolher tudo</button>
+          <label class="dre-sort-label">Ordenar por
+            <select id="dreSortSelect" class="dre-sort-select">
+              <option value="maior">Maior valor</option>
+              <option value="menor">Menor valor</option>
+              <option value="az">Nome (A → Z)</option>
+              <option value="za">Nome (Z → A)</option>
+            </select>
+          </label>
           <span style="color:var(--muted);font-size:11.5px;">Clique no ícone ▸ de cada linha para detalhar o nível seguinte.</span>
         </div>
         <div id="dreWrap">
@@ -598,6 +613,7 @@ const state = {
     busca: ""
   },
   dreExpanded: new Set(),
+  dreSortMode: "maior",
   charts: {},
   dirty: { dashboard: true, dre: true, resumo: true },
   activeView: "dashboard",
@@ -1351,7 +1367,7 @@ function renderTopBar(canvasId, entries, color){
   destroyChart(canvasId);
   const ctx = document.getElementById(canvasId);
   if(!ctx) return;
-  const top = entries.slice(0,8).reverse();
+  const top = entries.slice(0,8);
   state.charts[canvasId] = new Chart(ctx, {
     type:"bar",
     data:{ labels: top.map(e=>e[0]), datasets:[{ data: top.map(e=>e[1]), backgroundColor: color, borderRadius:4, maxBarThickness:20 }] },
@@ -1395,16 +1411,61 @@ function renderDashboard(){
   renderTopBar("chTopDespesas", groupSum(rows,"Despesa","descricao"), "#eb6834");
   renderTopBar("chTopReceitas", groupSum(rows,"Receita","descricao"), "#4a3aa7");
 
-  const recentes = [...rows].sort((a,b)=> (b._ts||0)-(a._ts||0)).slice(0,10);
-  document.getElementById("lancCount").textContent = rows.length.toLocaleString("pt-BR") + " no período filtrado";
-  const tbody = document.querySelector("#tblRecentes tbody");
-  tbody.innerHTML = recentes.map(r => (
-    "<tr><td>"+fmtDateBR(r.data)+"</td>" +
-    '<td><span class="badge '+(r.tipo==="Receita"?"receita":r.tipo==="Despesa"?"despesa":"outro")+'">'+escapeHtml(r.tipo)+"</span></td>" +
-    "<td>"+escapeHtml(r.grupo1)+"</td>" +
-    "<td>"+escapeHtml(r.descricao)+"</td>" +
-    '<td style="text-align:right;" class="tabular">'+fmtMoneyAcct(r.valorSigned)+"</td></tr>"
-  )).join("") || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Nenhum lançamento no período selecionado.</td></tr>';
+  renderBancoAnalysis(rows);
+}
+
+function bankStats(rows){
+  const map = new Map();
+  rows.forEach(r => {
+    if(r.tipo !== "Receita" && r.tipo !== "Despesa") return;
+    if(!map.has(r.banco)) map.set(r.banco, { banco: r.banco, receitas: 0, despesas: 0, count: 0 });
+    const b = map.get(r.banco);
+    if(r.tipo === "Receita") b.receitas += r.valorSigned; else b.despesas += -r.valorSigned;
+    b.count++;
+  });
+  return [...map.values()]
+    .map(b => Object.assign(b, { resultado: b.receitas - b.despesas }))
+    .sort((a,b) => (Math.abs(b.receitas)+Math.abs(b.despesas)) - (Math.abs(a.receitas)+Math.abs(a.despesas)));
+}
+
+function renderBancoAnalysis(rows){
+  const stats = bankStats(rows);
+  document.getElementById("bankCount").textContent = stats.length + (stats.length===1 ? " banco/conta" : " bancos/contas");
+
+  destroyChart("chBancos");
+  const ctx = document.getElementById("chBancos");
+  if(ctx){
+    state.charts["chBancos"] = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: stats.map(b => b.banco),
+        datasets: [
+          { label: "Receitas", data: stats.map(b => b.receitas), backgroundColor: "#4a3aa7", borderRadius: 4, maxBarThickness: 42 },
+          { label: "Despesas", data: stats.map(b => b.despesas), backgroundColor: "#eb6834", borderRadius: 4, maxBarThickness: 42 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "top", align: "end" },
+          tooltip: { callbacks: { label: (c) => c.dataset.label+": "+fmtMoney(c.parsed.y) } }
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: { grid: { color: "#e6e1ee" }, ticks: { callback: (v) => "R$ "+(v/1000).toLocaleString("pt-BR")+"k" } }
+        }
+      }
+    });
+  }
+
+  const tbody = document.querySelector("#tblBancos tbody");
+  tbody.innerHTML = stats.map(b => (
+    "<tr><td>"+escapeHtml(b.banco)+"</td>" +
+    '<td style="text-align:right;" class="tabular">'+fmtMoneyAcct(b.receitas)+"</td>" +
+    '<td style="text-align:right;" class="tabular">'+fmtMoneyAcct(b.despesas)+"</td>" +
+    '<td style="text-align:right;" class="tabular">'+fmtMoneyAcct(b.resultado)+"</td>" +
+    '<td style="text-align:right;" class="tabular">'+b.count.toLocaleString("pt-BR")+"</td></tr>"
+  )).join("") || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Nenhuma movimentação bancária no período selecionado.</td></tr>';
 }
 
 /* ===================== DRE TREE ===================== */
@@ -1428,10 +1489,19 @@ function buildTree(rows){
   return root;
 }
 
-function flattenTree(root){
+function compareDreNodes(a, b, mode){
+  switch(mode){
+    case "menor": return Math.abs(a[1].total) - Math.abs(b[1].total);
+    case "az": return a[0].localeCompare(b[0], "pt-BR");
+    case "za": return b[0].localeCompare(a[0], "pt-BR");
+    default: return Math.abs(b[1].total) - Math.abs(a[1].total); // "maior" (padrão)
+  }
+}
+
+function flattenTree(root, sortMode){
   const rows = [];
   function walk(node, ancestorKeys, pathParts){
-    const entries = [...node.children.entries()].sort((a,b)=> b[1].total - a[1].total);
+    const entries = [...node.children.entries()].sort((a,b)=> compareDreNodes(a,b,sortMode));
     entries.forEach(([label, child]) => {
       const parts = [...pathParts, label];
       const pathKey = parts.join(TREE_SEP);
@@ -1467,7 +1537,7 @@ function renderDRE(){
   headRow.innerHTML = "<th>Descrição</th>" + monthsForCols.map(m => "<th>"+escapeHtml(monthLabel(m))+"</th>").join("") + "<th>Total</th>";
 
   const tree = buildTree(rows);
-  const flat = flattenTree(tree);
+  const flat = flattenTree(tree, state.dreSortMode);
   state._dreFlat = flat;
   state._dreGrandTotal = flat.filter(r=>r.level===0).reduce((s,r)=>s+r.total,0);
   state._dreGrandMonthly = {};
@@ -1525,6 +1595,10 @@ document.getElementById("btnExpandAll").addEventListener("click", () => {
 document.getElementById("btnCollapseAll").addEventListener("click", () => {
   state.dreExpanded.clear();
   renderDreRows();
+});
+document.getElementById("dreSortSelect").addEventListener("change", (e) => {
+  state.dreSortMode = e.target.value;
+  renderDRE();
 });
 
 /* ===================== RESUMO EXECUTIVO ===================== */
