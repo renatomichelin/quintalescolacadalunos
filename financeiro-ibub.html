@@ -167,6 +167,7 @@ table.simple tr:last-child td{border-bottom:none;}
 .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;}
 .badge.receita{background:var(--purple-100);color:var(--purple-600);}
 .badge.despesa{background:var(--orange-100);color:var(--orange-600);}
+.badge.outro{background:var(--border-soft);color:var(--muted);}
 .pos{color:var(--good);font-weight:700;}
 .neg{color:var(--critical);font-weight:700;}
 
@@ -234,6 +235,18 @@ table.dre tbody tr:hover td:first-child{background:var(--purple-50);}
 @keyframes spin{to{transform:rotate(360deg);}}
 #loadingOverlay span{color:#fff;font-size:13px;font-weight:600;}
 
+/* ===== COLUMN MAPPING MODAL ===== */
+#mapModalOverlay{position:fixed;inset:0;background:rgba(27,16,48,.6);backdrop-filter:blur(2px);z-index:1100;display:none;align-items:center;justify-content:center;padding:20px;}
+#mapModalOverlay.show{display:flex;}
+.map-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow-md);max-width:560px;width:100%;max-height:86vh;overflow-y:auto;padding:26px 28px;}
+.map-card h3{font-size:17px;font-weight:800;color:var(--ink);margin-bottom:6px;}
+.map-card .sub{font-size:12.5px;color:var(--muted);margin-bottom:18px;line-height:1.5;}
+.map-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--border-soft);}
+.map-row label{font-size:13px;font-weight:600;color:var(--ink-2);}
+.map-row .req{color:var(--critical);}
+.map-row select{border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:12.5px;color:var(--ink);min-width:200px;max-width:220px;background:#fff;}
+.map-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width:980px){
   .kpi-grid{grid-template-columns:repeat(2,1fr);}
@@ -258,6 +271,18 @@ table.dre tbody tr:hover td:first-child{background:var(--purple-50);}
 
 <div id="loadingOverlay"><div class="spinner"></div><span id="loadingText">Processando…</span></div>
 <div id="toast"></div>
+
+<div id="mapModalOverlay">
+  <div class="map-card">
+    <h3>Confirme o mapeamento de colunas</h3>
+    <div class="sub" id="mapModalMeta"></div>
+    <div id="mapModalBody"></div>
+    <div class="map-actions">
+      <button class="btn btn-ghost" id="btnMapCancel">Cancelar</button>
+      <button class="btn btn-primary" id="btnMapConfirm">Confirmar e Carregar</button>
+    </div>
+  </div>
+</div>
 
 <aside id="sidebar">
   <div class="sb-brand">
@@ -333,11 +358,13 @@ table.dre tbody tr:hover td:first-child{background:var(--purple-50);}
     <div class="ms" id="msGrupo1"></div>
     <div class="ms" id="msGrupo2"></div>
     <div class="ms" id="msGrupo3"></div>
+    <div class="ms" id="msBanco"></div>
     <div class="fbar-sep"></div>
     <div class="seg" id="segTipo">
       <button data-tipo="todos" class="on">Todos</button>
       <button data-tipo="Receita">Receitas</button>
       <button data-tipo="Despesa">Despesas</button>
+      <button data-tipo="Outro">Outros</button>
     </div>
     <div id="searchBox">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
@@ -545,7 +572,8 @@ const COL_ALIASES = {
   observacoes: ["observacoes","obs","observacao","nota","notas"],
   valor: ["valor","valor r$","valor total","vl","montante","valor (r$)"],
   centrocusto: ["centro de custo","centro custo","cc"],
-  formapagamento: ["forma de pagamento","forma pagamento","pagamento","meio de pagamento"]
+  formapagamento: ["forma de pagamento","forma pagamento","pagamento","meio de pagamento"],
+  banco: ["banco","conta bancaria","conta","banco/conta","instituicao financeira"]
 };
 
 const CAT_COLORS = ["#4a3aa7","#eb6834","#1baf7a","#eda100","#e87ba4","#2a78d6","#008300","#e34948"];
@@ -556,7 +584,7 @@ const state = {
   filtered: [],
   sourceFileName: null,
   savedAt: null,
-  options: { anos: [], meses: [1,2,3,4,5,6,7,8,9,10,11,12], grupo1: [], grupo2: [], grupo3: [] },
+  options: { anos: [], meses: [1,2,3,4,5,6,7,8,9,10,11,12], grupo1: [], grupo2: [], grupo3: [], banco: [] },
   filters: {
     periodMode: "tudo",
     dateFrom: null,
@@ -566,13 +594,15 @@ const state = {
     grupo1: new Set(),
     grupo2: new Set(),
     grupo3: new Set(),
+    banco: new Set(),
     tipo: "todos",
     busca: ""
   },
   dreExpanded: new Set(),
   charts: {},
   dirty: { dashboard: true, dre: true, resumo: true },
-  activeView: "dashboard"
+  activeView: "dashboard",
+  _pendingImport: null
 };
 
 /* ===================== UTILS ===================== */
@@ -682,11 +712,11 @@ function parseDateCell(v){
   return isNaN(d.getTime()) ? null : d;
 }
 
-function inferTipo(grupo1, valorSign){
+function inferTipo(grupo1){
   const g = norm(grupo1);
   if(g.includes("receita") || g.includes("entrada")) return "Receita";
   if(g.includes("despesa") || g.includes("saida") || g.includes("saída")) return "Despesa";
-  return valorSign < 0 ? "Despesa" : "Receita";
+  return null;
 }
 
 function buildRecord(row, colMap, idx){
@@ -697,15 +727,21 @@ function buildRecord(row, colMap, idx){
   const grupo3 = String(colMap.grupo3 ? (row[colMap.grupo3] ?? "") : "").trim() || "(Sem Grupo 3)";
   const descricao = String(colMap.descricao ? (row[colMap.descricao] ?? "") : "").trim() || "(Sem Descrição)";
   const observacoes = String(colMap.observacoes ? (row[colMap.observacoes] ?? "") : "").trim();
-  let valor = parseValorCell(colMap.valor ? row[colMap.valor] : 0);
+  const banco = colMap.banco ? String(row[colMap.banco] ?? "").trim() : "";
+  const valorSigned = parseValorCell(colMap.valor ? row[colMap.valor] : 0);
   const tipoRaw = colMap.tipo ? String(row[colMap.tipo] ?? "").trim() : "";
-  let tipo = tipoRaw;
-  if(!tipo || !/receita|despesa/i.test(tipo)){
-    tipo = inferTipo(grupo1, valor);
+  let tipo;
+  if(tipoRaw && /receita|despesa/i.test(tipoRaw)){
+    tipo = /receita/i.test(tipoRaw) ? "Receita" : "Despesa";
   } else {
-    tipo = /receita/i.test(tipo) ? "Receita" : "Despesa";
+    tipo = inferTipo(grupo1);
+    if(!tipo){
+      // Sem coluna de Tipo e Grupo 1 não indica Receita/Despesa (ex.: Saldo Inicial,
+      // Transferências): classifica como "Outro" em vez de adivinhar pelo sinal,
+      // para não inflar os totais de Receitas/Despesas com valores que não são resultado.
+      tipo = grupo1 === "(Sem Grupo 1)" ? (valorSigned < 0 ? "Despesa" : "Receita") : "Outro";
+    }
   }
-  valor = Math.abs(valor);
   const rec = {
     _id: idx,
     data: d ? d.toISOString() : null,
@@ -715,12 +751,48 @@ function buildRecord(row, colMap, idx){
     tipo,
     grupo1, grupo2, grupo3, descricao,
     observacoes: observacoes || "(Sem Observação)",
-    valor,
+    banco: banco || "(Sem Banco)",
+    valor: Math.abs(valorSigned),
+    valorSigned,
     centrocusto: colMap.centrocusto ? String(row[colMap.centrocusto] ?? "").trim() : "",
     formapagamento: colMap.formapagamento ? String(row[colMap.formapagamento] ?? "").trim() : ""
   };
-  rec._search = norm([rec.grupo1, rec.grupo2, rec.grupo3, rec.descricao, rec.observacoes].join(" "));
+  rec._search = norm([rec.grupo1, rec.grupo2, rec.grupo3, rec.descricao, rec.observacoes, rec.banco].join(" "));
   return rec;
+}
+
+function findHeaderRow(ws, sheetName){
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false });
+  const FIELD_TOKENS = Object.values(COL_ALIASES).flat();
+  let bestIdx = 0, bestScore = -1;
+  const scanLimit = Math.min(rows.length, 15);
+  for(let i = 0; i < scanLimit; i++){
+    const row = rows[i] || [];
+    const nonEmpty = row.filter(c => c != null && String(c).trim() !== "");
+    if(nonEmpty.length < 2) continue;
+    let score = 0;
+    nonEmpty.forEach(c => {
+      const n = norm(c);
+      if(FIELD_TOKENS.some(tok => n === tok || n.includes(tok))) score++;
+    });
+    if(score > bestScore){ bestScore = score; bestIdx = i; }
+  }
+  const headerRow = (rows[bestIdx] || []).map((c,i) => (c == null || String(c).trim() === "") ? ("Coluna " + (i+1)) : String(c).trim());
+  const dataRows = rows.slice(bestIdx + 1);
+  const json = dataRows
+    .filter(r => r && r.some(c => c != null && String(c).trim() !== ""))
+    .map(r => {
+      const obj = {};
+      headerRow.forEach((h,i) => { obj[h] = r[i] != null ? r[i] : null; });
+      return obj;
+    });
+  return { json, headerRow };
+}
+
+function tryDetectFullColumns(json){
+  if(!json.length) return null;
+  const colMap = detectColumns(json[0]);
+  return (colMap.valor && colMap.descricao) ? colMap : null;
 }
 
 async function handleFile(file){
@@ -734,22 +806,98 @@ async function handleFile(file){
     if(!sheetName) sheetName = wb.SheetNames[0];
     if(!sheetName) throw new Error("Nenhuma aba encontrada no arquivo.");
     const ws = wb.Sheets[sheetName];
-    const json = XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
+    let json = XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
     if(!json.length) throw new Error('A aba "' + sheetName + '" está vazia.');
-    const colMap = detectColumns(json[0]);
-    if(!colMap.valor && !colMap.descricao){
-      throw new Error("Não foi possível identificar as colunas de Descrição/Valor. Verifique os cabeçalhos da planilha.");
+    let colMap = tryDetectFullColumns(json);
+    if(!colMap){
+      const alt = findHeaderRow(ws, sheetName);
+      if(alt.json.length){
+        const altMap = tryDetectFullColumns(alt.json);
+        if(altMap){ json = alt.json; colMap = altMap; }
+        else if(alt.json.length > json.length || Object.keys(alt.json[0]||{}).length > Object.keys(json[0]||{}).length){
+          json = alt.json;
+          colMap = detectColumns(json[0]);
+        }
+      }
     }
-    const rows = json.map((r,i) => buildRecord(r, colMap, i)).filter(r => r.valor !== 0 || (r.descricao && r.descricao !== "(Sem Descrição)"));
-    if(!rows.length) throw new Error("Nenhum lançamento válido encontrado na aba " + sheetName + ".");
-    loadRows(rows, { source: file.name, sheetUsed: sheetName, replace: true });
-    toast('Planilha carregada: ' + rows.length + ' lançamentos da aba "' + sheetName + '".');
+    if(!colMap) colMap = detectColumns(json[0]);
+    showLoading(false);
+    if(colMap.valor && colMap.descricao){
+      finishImport(json, colMap, file.name, sheetName);
+    } else {
+      openColumnMappingModal(json, colMap, file.name, sheetName);
+    }
   }catch(err){
     console.error(err);
     alert("Erro ao carregar planilha: " + err.message);
-  }finally{
     showLoading(false);
   }
+}
+
+function finishImport(json, colMap, fileName, sheetName){
+  showLoading(true, "Processando…");
+  setTimeout(() => {
+    try{
+      const rows = json.map((r,i) => buildRecord(r, colMap, i)).filter(r => r.valor !== 0 || (r.descricao && r.descricao !== "(Sem Descrição)"));
+      if(!rows.length) throw new Error("Nenhum lançamento válido encontrado na aba " + sheetName + ". Verifique se as colunas selecionadas contêm os dados corretos.");
+      loadRows(rows, { source: fileName, sheetUsed: sheetName, replace: true });
+      toast('Planilha carregada: ' + rows.length + ' lançamentos da aba "' + sheetName + '".');
+    }catch(err){
+      console.error(err);
+      alert("Erro ao carregar planilha: " + err.message);
+    }finally{
+      showLoading(false);
+    }
+  }, 20);
+}
+
+const MAP_FIELDS = [
+  { key: "descricao", label: "Descrição", required: true },
+  { key: "valor", label: "Valor", required: true },
+  { key: "data", label: "Data", required: false },
+  { key: "tipo", label: "Tipo (Receita/Despesa)", required: false },
+  { key: "grupo1", label: "Grupo 1", required: false },
+  { key: "grupo3", label: "Grupo 3", required: false },
+  { key: "grupo2", label: "Grupo 2", required: false },
+  { key: "observacoes", label: "Observações", required: false },
+  { key: "centrocusto", label: "Centro de Custo", required: false },
+  { key: "formapagamento", label: "Forma de Pagamento", required: false },
+  { key: "banco", label: "Banco / Conta", required: false }
+];
+
+function openColumnMappingModal(json, colMap, fileName, sheetName){
+  const headers = Object.keys(json[0] || {});
+  const body = document.getElementById("mapModalBody");
+  body.innerHTML = MAP_FIELDS.map(f => {
+    const current = colMap[f.key] || "";
+    const options = ['<option value="">(Nenhuma)</option>'].concat(
+      headers.map(h => '<option value="'+escapeHtml(h)+'"'+(current===h?" selected":"")+'>'+escapeHtml(h)+"</option>")
+    ).join("");
+    return '<div class="map-row"><label>'+escapeHtml(f.label)+(f.required?' <span class="req">*</span>':"")+'</label><select data-field="'+f.key+'">'+options+"</select></div>";
+  }).join("");
+  document.getElementById("mapModalMeta").textContent =
+    'Não conseguimos identificar automaticamente todas as colunas na aba "'+sheetName+'" ('+headers.length+' colunas, '+json.length+' linhas). Selecione manualmente qual coluna da planilha corresponde a cada campo abaixo.';
+  state._pendingImport = { json, fileName, sheetName };
+  document.getElementById("mapModalOverlay").classList.add("show");
+}
+
+function closeColumnMappingModal(){
+  document.getElementById("mapModalOverlay").classList.remove("show");
+  state._pendingImport = null;
+}
+
+function confirmColumnMapping(){
+  const selects = document.querySelectorAll("#mapModalBody select[data-field]");
+  const colMap = {};
+  selects.forEach(s => { colMap[s.dataset.field] = s.value || null; });
+  if(!colMap.valor || !colMap.descricao){
+    alert("Selecione ao menos as colunas de Descrição e Valor para continuar.");
+    return;
+  }
+  const pending = state._pendingImport;
+  if(!pending) return;
+  closeColumnMappingModal();
+  finishImport(pending.json, colMap, pending.fileName, pending.sheetName);
 }
 
 /* ===================== LOAD / PERSIST ===================== */
@@ -758,7 +906,9 @@ function reviveRows(rows){
     const rec = Object.assign({}, r);
     rec._id = i;
     if(rec.data && rec._ts == null){ const d = new Date(rec.data); rec._ts = isNaN(d.getTime()) ? null : d.getTime(); }
-    if(!rec._search){ rec._search = norm([rec.grupo1,rec.grupo2,rec.grupo3,rec.descricao,rec.observacoes].join(" ")); }
+    if(rec.valorSigned == null){ rec.valorSigned = rec.tipo === "Despesa" ? -Math.abs(rec.valor||0) : Math.abs(rec.valor||0); }
+    if(!rec.banco) rec.banco = "(Sem Banco)";
+    if(!rec._search){ rec._search = norm([rec.grupo1,rec.grupo2,rec.grupo3,rec.descricao,rec.observacoes,rec.banco].join(" ")); }
     return rec;
   });
 }
@@ -858,20 +1008,22 @@ function tentarCarregarDadosSalvos(){
 
 /* ===================== FILTER OPTIONS ===================== */
 function buildFilterOptions(){
-  const anos = new Set(), g1 = new Set(), g2 = new Set(), g3 = new Set();
+  const anos = new Set(), g1 = new Set(), g2 = new Set(), g3 = new Set(), bancos = new Set();
   state.rawData.forEach(r => {
     if(r.ano) anos.add(r.ano);
-    g1.add(r.grupo1); g2.add(r.grupo2); g3.add(r.grupo3);
+    g1.add(r.grupo1); g2.add(r.grupo2); g3.add(r.grupo3); bancos.add(r.banco);
   });
   state.options.anos = [...anos].sort((a,b)=>a-b);
   state.options.grupo1 = [...g1].sort();
   state.options.grupo2 = [...g2].sort();
   state.options.grupo3 = [...g3].sort();
+  state.options.banco = [...bancos].sort();
   state.filters.anos = new Set(state.options.anos);
   state.filters.meses = new Set(state.options.meses);
   state.filters.grupo1 = new Set(state.options.grupo1);
   state.filters.grupo2 = new Set(state.options.grupo2);
   state.filters.grupo3 = new Set(state.options.grupo3);
+  state.filters.banco = new Set(state.options.banco);
   state.filters.tipo = "todos";
   state.filters.periodMode = "tudo";
   state.filters.dateFrom = null;
@@ -886,6 +1038,8 @@ function buildFilterOptions(){
   renderMultiSelect("msGrupo1", "Grupo 1", state.options.grupo1, state.filters.grupo1, x=>x);
   renderMultiSelect("msGrupo2", "Grupo 2", state.options.grupo2, state.filters.grupo2, x=>x);
   renderMultiSelect("msGrupo3", "Grupo 3", state.options.grupo3, state.filters.grupo3, x=>x);
+  document.getElementById("msBanco").style.display = state.options.banco.length > 1 ? "" : "none";
+  renderMultiSelect("msBanco", "Banco", state.options.banco, state.filters.banco, x=>x);
 }
 
 function renderMultiSelect(containerId, label, options, selectedSet, labelFn){
@@ -980,6 +1134,7 @@ function applyFilters(){
     if(f.grupo1.size && !f.grupo1.has(r.grupo1)) return false;
     if(f.grupo2.size && !f.grupo2.has(r.grupo2)) return false;
     if(f.grupo3.size && !f.grupo3.has(r.grupo3)) return false;
+    if(f.banco.size && !f.banco.has(r.banco)) return false;
     if(f.tipo !== "todos" && r.tipo !== f.tipo) return false;
     if(searchN && !r._search.includes(searchN)) return false;
     return true;
@@ -1022,9 +1177,13 @@ function showView(name){
 
 /* ===================== KPI / ANALYTICS ===================== */
 function computeTotals(rows){
-  let receitas = 0, despesas = 0;
-  rows.forEach(r => { if(r.tipo === "Receita") receitas += r.valor; else despesas += r.valor; });
-  return { receitas, despesas, resultado: receitas - despesas, count: rows.length };
+  let receitas = 0, despesas = 0, outros = 0;
+  rows.forEach(r => {
+    if(r.tipo === "Receita") receitas += r.valor;
+    else if(r.tipo === "Despesa") despesas += r.valor;
+    else outros += r.valorSigned;
+  });
+  return { receitas, despesas, outros, resultado: receitas - despesas, count: rows.length };
 }
 
 function previousPeriodRows(){
@@ -1040,6 +1199,7 @@ function previousPeriodRows(){
     if(f.grupo1.size && !f.grupo1.has(r.grupo1)) return false;
     if(f.grupo2.size && !f.grupo2.has(r.grupo2)) return false;
     if(f.grupo3.size && !f.grupo3.has(r.grupo3)) return false;
+    if(f.banco.size && !f.banco.has(r.banco)) return false;
     if(f.tipo !== "todos" && r.tipo !== f.tipo) return false;
     return true;
   });
@@ -1198,7 +1358,7 @@ function renderDashboard(){
   const tbody = document.querySelector("#tblRecentes tbody");
   tbody.innerHTML = recentes.map(r => (
     "<tr><td>"+fmtDateBR(r.data)+"</td>" +
-    '<td><span class="badge '+(r.tipo==="Receita"?"receita":"despesa")+'">'+escapeHtml(r.tipo)+"</span></td>" +
+    '<td><span class="badge '+(r.tipo==="Receita"?"receita":r.tipo==="Despesa"?"despesa":"outro")+'">'+escapeHtml(r.tipo)+"</span></td>" +
     "<td>"+escapeHtml(r.grupo1)+"</td>" +
     "<td>"+escapeHtml(r.descricao)+"</td>" +
     '<td style="text-align:right;" class="tabular">'+fmtMoney(r.valor)+"</td></tr>"
@@ -1209,7 +1369,7 @@ function renderDashboard(){
 function buildTree(rows){
   const root = { children: new Map() };
   rows.forEach(r => {
-    const signed = r.tipo === "Despesa" ? -r.valor : r.valor;
+    const signed = r.valorSigned;
     const ym = (r.ano && r.mes) ? (r.ano + "-" + String(r.mes).padStart(2,"0")) : "sem-data";
     const path = [r.grupo1, r.grupo3, r.grupo2, r.descricao, r.observacoes];
     let node = root;
@@ -1247,6 +1407,8 @@ function flattenTree(root){
   return rows;
 }
 
+const DRE_AUTO_EXPAND_LIMIT = 600;
+
 function renderDRE(){
   const empty = document.getElementById("dreEmpty");
   const wrap = document.getElementById("dreBodyWrap");
@@ -1257,6 +1419,7 @@ function renderDRE(){
   const months = monthKeysInRows(rows);
   months.sort();
   const monthsForCols = months.length ? months : ["sem-data"];
+  state._dreMonths = monthsForCols;
 
   const headRow = document.getElementById("dreHeadRow");
   headRow.innerHTML = "<th>Descrição</th>" + monthsForCols.map(m => "<th>"+escapeHtml(monthLabel(m))+"</th>").join("") + "<th>Total</th>";
@@ -1264,9 +1427,22 @@ function renderDRE(){
   const tree = buildTree(rows);
   const flat = flattenTree(tree);
   state._dreFlat = flat;
+  state._dreGrandTotal = flat.filter(r=>r.level===0).reduce((s,r)=>s+r.total,0);
+  state._dreGrandMonthly = {};
+  monthsForCols.forEach(m => {
+    state._dreGrandMonthly[m] = flat.filter(r=>r.level===0).reduce((s,r)=> s + (r.monthly[m]||0), 0);
+  });
+
+  renderDreRows();
+}
+
+function renderDreRows(){
+  const flat = state._dreFlat || [];
+  const monthsForCols = state._dreMonths || [];
+  const visible = flat.filter(row => row.level === 0 || row.ancestors.every(a => state.dreExpanded.has(a)));
 
   const tbody = document.getElementById("dreBody");
-  tbody.innerHTML = flat.map(row => {
+  tbody.innerHTML = visible.map(row => {
     const cells = monthsForCols.map(m => {
       const v = row.monthly[m] || 0;
       return '<td class="tabular '+(v<0?"neg":v>0?"pos":"")+'">'+ (v ? fmtNum(v) : "—") +"</td>";
@@ -1274,50 +1450,39 @@ function renderDRE(){
     const caret = row.hasChildren
       ? '<button class="dre-caret'+(state.dreExpanded.has(row.pathKey)?" expanded":"")+'" data-toggle="'+encodeURIComponent(row.pathKey)+'"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 6l6 6-6 6"/></svg></button>'
       : '<span class="dre-caret leaf"></span>';
-    return '<tr class="lvl'+row.level+'" data-path="'+encodeURIComponent(row.pathKey)+'" data-parent="'+(row.parentKey?encodeURIComponent(row.parentKey):"")+'" data-ancestors="'+row.ancestors.map(encodeURIComponent).join("|")+'" data-level="'+row.level+'">' +
+    return '<tr class="lvl'+row.level+'">' +
       '<td><span class="dre-label">'+caret+"<span>"+escapeHtml(row.label)+(row.level>=4?' <span style="color:var(--muted);font-weight:400;">('+row.count+')</span>':"")+"</span></span></td>" +
       cells +
       '<td class="tabular" style="font-weight:700;">'+fmtNum(row.total)+"</td></tr>";
   }).join("");
 
-  const grandTotal = flat.filter(r=>r.level===0).reduce((s,r)=>s+r.total,0);
-  const totalCells = monthsForCols.map(m => {
-    const v = flat.filter(r=>r.level===0).reduce((s,r)=> s + (r.monthly[m]||0), 0);
-    return '<td class="tabular">'+fmtNum(v)+"</td>";
-  }).join("");
-  tbody.innerHTML += '<tr class="dre-total-row"><td>RESULTADO LÍQUIDO</td>'+totalCells+'<td class="tabular">'+fmtNum(grandTotal)+"</td></tr>";
-
-  updateTreeVisibility();
-}
-
-function updateTreeVisibility(){
-  document.querySelectorAll("#dreBody tr[data-path]").forEach(tr => {
-    const level = parseInt(tr.dataset.level, 10);
-    let visible = true;
-    if(level > 0){
-      const ancestors = tr.dataset.ancestors ? tr.dataset.ancestors.split("|").filter(Boolean) : [];
-      visible = ancestors.every(a => state.dreExpanded.has(decodeURIComponent(a)));
-    }
-    tr.style.display = visible ? "" : "none";
-  });
+  const totalCells = monthsForCols.map(m => '<td class="tabular">'+fmtNum(state._dreGrandMonthly[m]||0)+"</td>").join("");
+  tbody.innerHTML += '<tr class="dre-total-row"><td>RESULTADO LÍQUIDO</td>'+totalCells+'<td class="tabular">'+fmtNum(state._dreGrandTotal)+"</td></tr>";
 }
 
 document.getElementById("dreBody").addEventListener("click", (e) => {
   const btn = e.target.closest(".dre-caret[data-toggle]");
   if(!btn) return;
   const key = decodeURIComponent(btn.dataset.toggle);
-  if(state.dreExpanded.has(key)){ state.dreExpanded.delete(key); btn.classList.remove("expanded"); }
-  else { state.dreExpanded.add(key); btn.classList.add("expanded"); }
-  updateTreeVisibility();
+  if(state.dreExpanded.has(key)) state.dreExpanded.delete(key);
+  else state.dreExpanded.add(key);
+  renderDreRows();
 });
 
 document.getElementById("btnExpandAll").addEventListener("click", () => {
-  (state._dreFlat||[]).forEach(r => { if(r.hasChildren) state.dreExpanded.add(r.pathKey); });
-  renderDRE();
+  const flat = state._dreFlat || [];
+  const capped = flat.length > DRE_AUTO_EXPAND_LIMIT;
+  flat.forEach(r => {
+    if(!r.hasChildren) return;
+    if(capped && r.level >= 3) return;
+    state.dreExpanded.add(r.pathKey);
+  });
+  renderDreRows();
+  if(capped) toast("Muitos lançamentos: o nível de Observações foi mantido recolhido por desempenho. Expanda uma Descrição específica para ver o detalhe.");
 });
 document.getElementById("btnCollapseAll").addEventListener("click", () => {
   state.dreExpanded.clear();
-  renderDRE();
+  renderDreRows();
 });
 
 /* ===================== RESUMO EXECUTIVO ===================== */
@@ -1399,6 +1564,9 @@ function bindEvents(){
 
   document.getElementById("btnSave").addEventListener("click", salvarDadosNoHTML);
   document.getElementById("btnGerarPDF").addEventListener("click", gerarPDF);
+
+  document.getElementById("btnMapCancel").addEventListener("click", closeColumnMappingModal);
+  document.getElementById("btnMapConfirm").addEventListener("click", confirmColumnMapping);
 
   document.getElementById("periodQuick").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-mode]");
