@@ -173,8 +173,11 @@ table.simple tr:last-child td{border-bottom:none;}
 
 /* ===== DRE TABLE ===== */
 .dre-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
-.dre-sort-label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--ink-2);}
-.dre-sort-select{border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12.5px;color:var(--ink);background:#fff;font-weight:600;}
+.sort-panel{min-width:260px;padding:12px;}
+.sort-panel-note{font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border-soft);}
+.sort-panel-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;}
+.sort-panel-row label{font-size:12.5px;font-weight:600;color:var(--ink-2);}
+.sort-panel-row select{border:1px solid var(--border);border-radius:7px;padding:5px 8px;font-size:12px;color:var(--ink);background:#fff;font-weight:600;min-width:140px;}
 #dreWrap{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:auto;max-height:70vh;}
 table.dre{border-collapse:collapse;width:100%;font-size:12.5px;min-width:720px;}
 table.dre thead th{position:sticky;top:0;background:var(--purple-900);color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;padding:11px 12px;text-align:right;white-space:nowrap;z-index:5;}
@@ -468,14 +471,19 @@ table.dre tbody tr:hover td:first-child{background:var(--purple-50);}
         <div class="dre-toolbar">
           <button class="btn btn-secondary btn-sm" id="btnExpandAll">Expandir tudo</button>
           <button class="btn btn-ghost btn-sm" id="btnCollapseAll">Recolher tudo</button>
-          <label class="dre-sort-label">Ordenar por
-            <select id="dreSortSelect" class="dre-sort-select">
-              <option value="maior">Maior valor</option>
-              <option value="menor">Menor valor</option>
-              <option value="az">Nome (A → Z)</option>
-              <option value="za">Nome (Z → A)</option>
-            </select>
-          </label>
+          <div class="ms" id="dreSortMenu">
+            <button class="ms-btn" id="dreSortBtn">
+              Ordenação por nível
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="ms-panel sort-panel" id="dreSortPanel">
+              <div class="sort-panel-note">Grupo 1 é fixo (Receitas, depois Despesas). Escolha a ordenação de cada nível abaixo:</div>
+              <div class="sort-panel-row"><label>Grupo 3</label><select class="dre-level-sort" data-level="1"></select></div>
+              <div class="sort-panel-row"><label>Grupo 2</label><select class="dre-level-sort" data-level="2"></select></div>
+              <div class="sort-panel-row"><label>Descrição</label><select class="dre-level-sort" data-level="3"></select></div>
+              <div class="sort-panel-row"><label>Observações</label><select class="dre-level-sort" data-level="4"></select></div>
+            </div>
+          </div>
           <span style="color:var(--muted);font-size:11.5px;">Clique no ícone ▸ de cada linha para detalhar o nível seguinte.</span>
         </div>
         <div id="dreWrap">
@@ -613,7 +621,7 @@ const state = {
     busca: ""
   },
   dreExpanded: new Set(),
-  dreSortMode: "maior",
+  dreSortModes: { 1: "maior", 2: "maior", 3: "maior", 4: "maior" },
   charts: {},
   dirty: { dashboard: true, dre: true, resumo: true },
   activeView: "dashboard",
@@ -1498,10 +1506,27 @@ function compareDreNodes(a, b, mode){
   }
 }
 
-function flattenTree(root, sortMode){
+// Grupo 1 (nível 0) é sempre fixo: Receitas primeiro, Despesas em seguida — não é
+// afetado pelos seletores de ordenação, que valem apenas para os níveis abaixo.
+function compareLevel0Nodes(a, b){
+  const priority = (label) => {
+    const n = norm(label);
+    if(n.includes("receita")) return 0;
+    if(n.includes("despesa")) return 1;
+    return 2;
+  };
+  const pa = priority(a[0]), pb = priority(b[0]);
+  if(pa !== pb) return pa - pb;
+  return Math.abs(b[1].total) - Math.abs(a[1].total);
+}
+
+function flattenTree(root, sortModes){
   const rows = [];
   function walk(node, ancestorKeys, pathParts){
-    const entries = [...node.children.entries()].sort((a,b)=> compareDreNodes(a,b,sortMode));
+    const level = pathParts.length;
+    const entries = [...node.children.entries()].sort((a,b)=>
+      level === 0 ? compareLevel0Nodes(a,b) : compareDreNodes(a,b, sortModes[level])
+    );
     entries.forEach(([label, child]) => {
       const parts = [...pathParts, label];
       const pathKey = parts.join(TREE_SEP);
@@ -1537,7 +1562,7 @@ function renderDRE(){
   headRow.innerHTML = "<th>Descrição</th>" + monthsForCols.map(m => "<th>"+escapeHtml(monthLabel(m))+"</th>").join("") + "<th>Total</th>";
 
   const tree = buildTree(rows);
-  const flat = flattenTree(tree, state.dreSortMode);
+  const flat = flattenTree(tree, state.dreSortModes);
   state._dreFlat = flat;
   state._dreGrandTotal = flat.filter(r=>r.level===0).reduce((s,r)=>s+r.total,0);
   state._dreGrandMonthly = {};
@@ -1596,10 +1621,28 @@ document.getElementById("btnCollapseAll").addEventListener("click", () => {
   state.dreExpanded.clear();
   renderDreRows();
 });
-document.getElementById("dreSortSelect").addEventListener("change", (e) => {
-  state.dreSortMode = e.target.value;
-  renderDRE();
+const DRE_SORT_OPTIONS = [
+  { value: "maior", label: "Maior valor" },
+  { value: "menor", label: "Menor valor" },
+  { value: "az", label: "Nome (A → Z)" },
+  { value: "za", label: "Nome (Z → A)" }
+];
+document.querySelectorAll(".dre-level-sort").forEach(sel => {
+  const level = sel.dataset.level;
+  sel.innerHTML = DRE_SORT_OPTIONS.map(o => '<option value="'+o.value+'"'+(o.value===state.dreSortModes[level]?" selected":"")+'>'+o.label+"</option>").join("");
+  sel.addEventListener("change", (e) => {
+    state.dreSortModes[level] = e.target.value;
+    renderDRE();
+  });
 });
+document.getElementById("dreSortBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const panel = document.getElementById("dreSortPanel");
+  const wasOpen = panel.classList.contains("open");
+  document.querySelectorAll(".ms-panel.open").forEach(p => p.classList.remove("open"));
+  if(!wasOpen) panel.classList.add("open");
+});
+document.getElementById("dreSortPanel").addEventListener("click", (e) => e.stopPropagation());
 
 /* ===================== RESUMO EXECUTIVO ===================== */
 function renderResumo(){
