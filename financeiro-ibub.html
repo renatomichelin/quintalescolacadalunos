@@ -168,8 +168,7 @@ table.simple tr:last-child td{border-bottom:none;}
 .badge.receita{background:var(--purple-100);color:var(--purple-600);}
 .badge.despesa{background:var(--orange-100);color:var(--orange-600);}
 .badge.outro{background:var(--border-soft);color:var(--muted);}
-.pos{color:var(--good);font-weight:700;}
-.neg{color:var(--critical);font-weight:700;}
+.neg-amt{color:var(--critical);font-weight:700;}
 
 /* ===== DRE TABLE ===== */
 .dre-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
@@ -620,6 +619,19 @@ function fmtNum(v){
   const s = numberFmt.format(Math.abs(n));
   return (n < 0 ? "-" : "") + s;
 }
+// Formatação contábil: negativos entre parênteses e em vermelho (padrão de
+// demonstrativo financeiro). Retorna HTML — usar com innerHTML, não textContent.
+function fmtMoneyAcct(v){
+  const n = v || 0;
+  const s = currencyFmt.format(Math.abs(n));
+  return n < 0 ? '<span class="neg-amt">('+s+")</span>" : s;
+}
+function fmtNumAcct(v){
+  const n = v || 0;
+  if(!n) return "—";
+  const s = numberFmt.format(Math.abs(n));
+  return n < 0 ? '<span class="neg-amt">('+s+")</span>" : s;
+}
 function fmtPct(v){ return (v == null || !isFinite(v) ? "—" : (v>=0?"+":"") + v.toFixed(1) + "%"); }
 function fmtDateBR(d){
   if(!d) return "—";
@@ -913,9 +925,33 @@ function reviveRows(rows){
   });
 }
 
+function normalizeSignConventions(rows){
+  // Planilhas variam na convenção de sinal: algumas guardam despesa como valor
+  // negativo (padrão contábil, ex.: planilha da IBUB — nesse caso um valor
+  // positivo isolado é um estorno/correção e deve ser subtraído do total) e
+  // outras guardam só a magnitude positiva, distinguindo Receita/Despesa
+  // apenas pela coluna de Tipo/Grupo. Detecta a convenção predominante por
+  // tipo (maioria dos lançamentos) e normaliza os poucos que destoam dela,
+  // em vez de assumir uma única convenção fixa.
+  const buckets = { Receita: { pos: 0, neg: 0 }, Despesa: { pos: 0, neg: 0 } };
+  rows.forEach(r => {
+    const b = buckets[r.tipo];
+    if(!b) return;
+    if(r.valorSigned > 0) b.pos++; else if(r.valorSigned < 0) b.neg++;
+  });
+  const despesaNegativoEhPadrao = buckets.Despesa.neg >= buckets.Despesa.pos;
+  const receitaPositivoEhPadrao = buckets.Receita.pos >= buckets.Receita.neg;
+  if(despesaNegativoEhPadrao && receitaPositivoEhPadrao) return;
+  rows.forEach(r => {
+    if(r.tipo === "Despesa" && !despesaNegativoEhPadrao) r.valorSigned = -Math.abs(r.valorSigned);
+    if(r.tipo === "Receita" && !receitaPositivoEhPadrao) r.valorSigned = Math.abs(r.valorSigned);
+  });
+}
+
 function loadRows(rows, opts){
   opts = opts || {};
   state.rawData = reviveRows(rows);
+  normalizeSignConventions(state.rawData);
   if(opts.source) state.sourceFileName = opts.source;
   if(opts.savedAt) state.savedAt = opts.savedAt;
   buildFilterOptions();
@@ -1177,10 +1213,14 @@ function showView(name){
 
 /* ===================== KPI / ANALYTICS ===================== */
 function computeTotals(rows){
+  // Soma o valor com sinal original (valorSigned), não a magnitude absoluta: um
+  // estorno/correção lançado com sinal invertido dentro do próprio Grupo 1 precisa
+  // reduzir o total (líquido), exatamente como no DRE — nunca somar como se fosse
+  // um lançamento normal na mesma direção.
   let receitas = 0, despesas = 0, outros = 0;
   rows.forEach(r => {
-    if(r.tipo === "Receita") receitas += r.valor;
-    else if(r.tipo === "Despesa") despesas += r.valor;
+    if(r.tipo === "Receita") receitas += r.valorSigned;
+    else if(r.tipo === "Despesa") despesas += -r.valorSigned;
     else outros += r.valorSigned;
   });
   return { receitas, despesas, outros, resultado: receitas - despesas, count: rows.length };
@@ -1218,8 +1258,9 @@ function deltaBadge(el, curr, prev, higherIsBetter){
 
 function groupSum(rows, tipo, field){
   const map = new Map();
+  const sign = tipo === "Despesa" ? -1 : 1;
   rows.filter(r => r.tipo === tipo).forEach(r => {
-    map.set(r[field], (map.get(r[field]) || 0) + r.valor);
+    map.set(r[field], (map.get(r[field]) || 0) + sign * r.valorSigned);
   });
   return [...map.entries()].sort((a,b) => b[1]-a[1]);
 }
@@ -1250,7 +1291,8 @@ function renderEvolucaoChart(canvasId, rows){
       if(!r.ano || !r.mes) return;
       const key = r.ano + "-" + String(r.mes).padStart(2,"0");
       if(key !== m) return;
-      if(r.tipo === "Receita") rec += r.valor; else desp += r.valor;
+      if(r.tipo === "Receita") rec += r.valorSigned;
+      else if(r.tipo === "Despesa") desp += -r.valorSigned;
     });
     receitasArr.push(rec); despesasArr.push(desp); saldoArr.push(rec-desp);
   });
@@ -1334,9 +1376,9 @@ function renderDashboard(){
   const prevRows = previousPeriodRows();
   const prevTot = prevRows ? computeTotals(prevRows) : null;
 
-  document.getElementById("kpiReceitas").textContent = fmtMoney(tot.receitas);
-  document.getElementById("kpiDespesas").textContent = fmtMoney(tot.despesas);
-  document.getElementById("kpiResultado").textContent = fmtMoney(tot.resultado);
+  document.getElementById("kpiReceitas").innerHTML = fmtMoneyAcct(tot.receitas);
+  document.getElementById("kpiDespesas").innerHTML = fmtMoneyAcct(tot.despesas);
+  document.getElementById("kpiResultado").innerHTML = fmtMoneyAcct(tot.resultado);
   document.getElementById("kpiMargem").textContent = (tot.receitas ? (tot.resultado/tot.receitas*100).toFixed(1) : "0") + "%";
   document.getElementById("kpiLancamentos").textContent = tot.count.toLocaleString("pt-BR") + " lançamentos";
 
@@ -1361,7 +1403,7 @@ function renderDashboard(){
     '<td><span class="badge '+(r.tipo==="Receita"?"receita":r.tipo==="Despesa"?"despesa":"outro")+'">'+escapeHtml(r.tipo)+"</span></td>" +
     "<td>"+escapeHtml(r.grupo1)+"</td>" +
     "<td>"+escapeHtml(r.descricao)+"</td>" +
-    '<td style="text-align:right;" class="tabular">'+fmtMoney(r.valor)+"</td></tr>"
+    '<td style="text-align:right;" class="tabular">'+fmtMoneyAcct(r.valorSigned)+"</td></tr>"
   )).join("") || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Nenhum lançamento no período selecionado.</td></tr>';
 }
 
@@ -1445,7 +1487,7 @@ function renderDreRows(){
   tbody.innerHTML = visible.map(row => {
     const cells = monthsForCols.map(m => {
       const v = row.monthly[m] || 0;
-      return '<td class="tabular '+(v<0?"neg":v>0?"pos":"")+'">'+ (v ? fmtNum(v) : "—") +"</td>";
+      return '<td class="tabular">'+fmtNumAcct(v)+"</td>";
     }).join("");
     const caret = row.hasChildren
       ? '<button class="dre-caret'+(state.dreExpanded.has(row.pathKey)?" expanded":"")+'" data-toggle="'+encodeURIComponent(row.pathKey)+'"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 6l6 6-6 6"/></svg></button>'
@@ -1453,11 +1495,11 @@ function renderDreRows(){
     return '<tr class="lvl'+row.level+'">' +
       '<td><span class="dre-label">'+caret+"<span>"+escapeHtml(row.label)+(row.level>=4?' <span style="color:var(--muted);font-weight:400;">('+row.count+')</span>':"")+"</span></span></td>" +
       cells +
-      '<td class="tabular" style="font-weight:700;">'+fmtNum(row.total)+"</td></tr>";
+      '<td class="tabular" style="font-weight:700;">'+fmtNumAcct(row.total)+"</td></tr>";
   }).join("");
 
-  const totalCells = monthsForCols.map(m => '<td class="tabular">'+fmtNum(state._dreGrandMonthly[m]||0)+"</td>").join("");
-  tbody.innerHTML += '<tr class="dre-total-row"><td>RESULTADO LÍQUIDO</td>'+totalCells+'<td class="tabular">'+fmtNum(state._dreGrandTotal)+"</td></tr>";
+  const totalCells = monthsForCols.map(m => '<td class="tabular">'+fmtNumAcct(state._dreGrandMonthly[m]||0)+"</td>").join("");
+  tbody.innerHTML += '<tr class="dre-total-row"><td>RESULTADO LÍQUIDO</td>'+totalCells+'<td class="tabular">'+fmtNumAcct(state._dreGrandTotal)+"</td></tr>";
 }
 
 document.getElementById("dreBody").addEventListener("click", (e) => {
@@ -1497,9 +1539,9 @@ function renderResumo(){
 
   document.getElementById("rsPeriodo").textContent = periodLabel();
   document.getElementById("rsGeradoEm").textContent = "Gerado em " + new Date().toLocaleString("pt-BR");
-  document.getElementById("rsReceitas").textContent = fmtMoney(tot.receitas);
-  document.getElementById("rsDespesas").textContent = fmtMoney(tot.despesas);
-  document.getElementById("rsResultado").textContent = fmtMoney(tot.resultado);
+  document.getElementById("rsReceitas").innerHTML = fmtMoneyAcct(tot.receitas);
+  document.getElementById("rsDespesas").innerHTML = fmtMoneyAcct(tot.despesas);
+  document.getElementById("rsResultado").innerHTML = fmtMoneyAcct(tot.resultado);
   document.getElementById("rsMargem").textContent = (tot.receitas ? (tot.resultado/tot.receitas*100).toFixed(1) : "0") + "%";
 
   renderEvolucaoChart("rsEvolucao", rows);
@@ -1507,8 +1549,8 @@ function renderResumo(){
 
   const topRec = groupSum(rows,"Receita","descricao").slice(0,6);
   const topDesp = groupSum(rows,"Despesa","descricao").slice(0,6);
-  document.getElementById("rsTopReceitas").innerHTML = topRec.map(([l,v]) => "<tr><td>"+escapeHtml(l)+'</td><td class="v tabular">'+fmtMoney(v)+"</td></tr>").join("") || '<tr><td colspan="2" style="color:var(--muted);">Sem dados</td></tr>';
-  document.getElementById("rsTopDespesas").innerHTML = topDesp.map(([l,v]) => "<tr><td>"+escapeHtml(l)+'</td><td class="v tabular">'+fmtMoney(v)+"</td></tr>").join("") || '<tr><td colspan="2" style="color:var(--muted);">Sem dados</td></tr>';
+  document.getElementById("rsTopReceitas").innerHTML = topRec.map(([l,v]) => "<tr><td>"+escapeHtml(l)+'</td><td class="v tabular">'+fmtMoneyAcct(v)+"</td></tr>").join("") || '<tr><td colspan="2" style="color:var(--muted);">Sem dados</td></tr>';
+  document.getElementById("rsTopDespesas").innerHTML = topDesp.map(([l,v]) => "<tr><td>"+escapeHtml(l)+'</td><td class="v tabular">'+fmtMoneyAcct(v)+"</td></tr>").join("") || '<tr><td colspan="2" style="color:var(--muted);">Sem dados</td></tr>';
 }
 
 async function gerarPDF(){
