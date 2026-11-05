@@ -319,6 +319,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
           <input class="form-input" id="f-ra" type="text" placeholder="Ex: 234">
         </div>
         <div class="form-group">
+          <label class="form-label">Matrícula</label>
+          <input class="form-input" id="f-matricula" type="text" placeholder="Ex: ok">
+        </div>
+        <div class="form-group">
           <label class="form-label">Data de Nascimento</label>
           <input class="form-input" id="f-nasc" type="date">
         </div>
@@ -523,6 +527,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="fbar-group fbar-group-filters">
       <select class="sel" id="g-turma" onchange="buildGeral()"><option value="">Todas as turmas</option></select>
       <select class="sel" id="g-periodo" onchange="buildGeral()"><option value="">Todos os períodos</option></select>
+      <select class="sel" id="g-matricula" onchange="buildGeral()"><option value="">Matrícula</option></select>
       <span class="cnt" id="g-cnt"></span>
     </div>
   </div>
@@ -564,6 +569,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     </div>
     <div class="fbar-group fbar-group-filters">
       <select class="sel" id="t-periodo" onchange="buildTurmas()"><option value="">Todos os períodos</option></select>
+      <select class="sel" id="t-matricula" onchange="buildTurmas()"><option value="">Matrícula</option></select>
       <span class="cnt" id="t-cnt"></span>
     </div>
   </div>
@@ -603,6 +609,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="fbar-group fbar-group-filters">
       <select class="sel" id="fn-turma" onchange="buildFinanceiro()"><option value="">Todas as turmas</option></select>
       <select class="sel" id="fn-pagto" onchange="buildFinanceiro()"><option value="">Todos os pagamentos</option></select>
+      <select class="sel" id="fn-matricula" onchange="buildFinanceiro()"><option value="">Matrícula</option></select>
       <span class="cnt" id="fn-cnt"></span>
     </div>
   </div>
@@ -661,6 +668,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
           <select class="sel" id="l-period" onchange="filtrarLista()"><option value="">Período</option></select>
           <select class="sel" id="l-prof" onchange="filtrarLista()"><option value="">Professor</option></select>
           <select class="sel" id="l-pagto" onchange="filtrarLista()"><option value="">Pagamento</option></select>
+          <select class="sel" id="l-matricula" onchange="filtrarLista()"><option value="">Matrícula</option></select>
         </div>
       </div>
     </div>
@@ -687,6 +695,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     </div>
     <div class="fbar-group fbar-group-filters">
       <select class="sel" id="i-turma" onchange="buildIngresso()"><option value="">Todas as turmas</option></select>
+      <select class="sel" id="i-matricula" onchange="buildIngresso()"><option value="">Matrícula</option></select>
       <span class="cnt" id="i-cnt"></span>
     </div>
   </div>
@@ -745,6 +754,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
         </div>
         <div class="fbar-group fbar-group-filters">
           <select class="sel" id="c-turma" onchange="filtrarContatos()"><option value="">Turma</option></select>
+          <select class="sel" id="c-matricula" onchange="filtrarContatos()"><option value="">Matrícula</option></select>
         </div>
       </div>
     </div>
@@ -920,6 +930,7 @@ async function loadFromSupabase(){
       const obj = {
         _id: r.id,
         nome: r.nome||'', ra: r.ra||'', numero: r.numero||'', status: r.status||'Ativo',
+        matricula: r.matricula||'',
         periodo: r.periodo||'', nasc: nascStr, turma: r.turma||'',
         professor: r.professor||'', inicio: iniStr, termino: r.termino||null,
         pagto: r.pagto||'', vcto: r.vcto||null, valor: parseFloat(r.valor)||0,
@@ -1146,6 +1157,7 @@ async function saveToSupabase(alunoObj){
   if(!supaClient) return false;
   const payload = {
     nome:alunoObj.nome, ra:alunoObj.ra||null, numero:alunoObj.numero, status:alunoObj.status,
+    matricula:alunoObj.matricula||null,
     periodo:alunoObj.periodo, nasc:alunoObj.nasc, turma:alunoObj.turma,
     professor:alunoObj.professor, inicio:alunoObj.inicio, termino:alunoObj.termino,
     pagto:alunoObj.pagto, vcto:alunoObj.vcto, valor:alunoObj.valor,
@@ -1220,6 +1232,7 @@ async function upsertLoteSupabase(novos){
   for(let i=0; i<novos.length; i+=BATCH){
     const lote = novos.slice(i, i+BATCH).map(a=>({
       nome:a.nome, ra:a.ra||null, numero:a.numero||null, status:a.status||'Ativo',
+      matricula:a.matricula||null,
       periodo:a.periodo||null, nasc:a.nasc||null, turma:a.turma||null,
       professor:a.professor||null, inicio:a.inicio||null, termino:a.termino||null,
       pagto:a.pagto||null, vcto:a.vcto||null, valor:a.valor||0,
@@ -1528,13 +1541,16 @@ function kpi(v,l,s,ico,iCls,acc){
 function buildGeral(){
   const tSel = document.getElementById('g-turma').value;
   const pSel = document.getElementById('g-periodo').value;
+  const mSel = document.getElementById('g-matricula').value;
   const base = filtered('g-sw');
   // Selects encadeados
-  popSelSmart('g-turma',  DB, 'turma',   'Todas as turmas',    base.filter(a=>!pSel||a.periodo===pSel));
-  popSelSmart('g-periodo',DB, 'periodo', 'Todos os períodos',  base.filter(a=>!tSel||a.turma===tSel));
+  popSelSmart('g-turma',  DB, 'turma',   'Todas as turmas',    base.filter(a=>(!pSel||a.periodo===pSel)&&(!mSel||a.matricula===mSel)));
+  popSelSmart('g-periodo',DB, 'periodo', 'Todos os períodos',  base.filter(a=>(!tSel||a.turma===tSel)&&(!mSel||a.matricula===mSel)));
+  popSelSmart('g-matricula',DB,'matricula','Matrícula',        base.filter(a=>(!tSel||a.turma===tSel)&&(!pSel||a.periodo===pSel)));
   let d = base;
   if(tSel) d=d.filter(a=>a.turma===tSel);
   if(pSel) d=d.filter(a=>a.periodo===pSel);
+  if(mSel) d=d.filter(a=>a.matricula===mSel);
   document.getElementById('g-cnt').textContent = d.length+' aluno'+(d.length!==1?'s':'');
   document.getElementById('b-turma-g').textContent = d.length+' registros';
 
@@ -1613,10 +1629,13 @@ function buildGeral(){
 // ══════════════════════════════════════
 function buildTurmas(){
   const pSel = document.getElementById('t-periodo').value;
+  const mSel = document.getElementById('t-matricula').value;
   const base = filtered('t-sw');
-  popSelSmart('t-periodo', DB, 'periodo', 'Todos os períodos', base);
+  popSelSmart('t-periodo', DB, 'periodo', 'Todos os períodos', base.filter(a=>!mSel||a.matricula===mSel));
+  popSelSmart('t-matricula', DB, 'matricula', 'Matrícula', base.filter(a=>!pSel||a.periodo===pSel));
   let d = base;
   if(pSel) d=d.filter(a=>a.periodo===pSel);
+  if(mSel) d=d.filter(a=>a.matricula===mSel);
   document.getElementById('t-cnt').textContent = d.length+' aluno'+(d.length!==1?'s':'');
 
   const ct=cnt(d,x=>x.turma);
@@ -1688,12 +1707,15 @@ function buildTurmas(){
 function buildFinanceiro(){
   const tSel = document.getElementById('fn-turma').value;
   const pgSel = document.getElementById('fn-pagto').value;
+  const mSel = document.getElementById('fn-matricula').value;
   const base = filtered('f-sw');
-  popSelSmart('fn-turma', DB, 'turma', 'Todas as turmas',      base.filter(a=>!pgSel||a.pagto===pgSel));
-  popSelSmart('fn-pagto', DB, 'pagto', 'Todos os pagamentos',  base.filter(a=>!tSel||a.turma===tSel));
+  popSelSmart('fn-turma', DB, 'turma', 'Todas as turmas',      base.filter(a=>(!pgSel||a.pagto===pgSel)&&(!mSel||a.matricula===mSel)));
+  popSelSmart('fn-pagto', DB, 'pagto', 'Todos os pagamentos',  base.filter(a=>(!tSel||a.turma===tSel)&&(!mSel||a.matricula===mSel)));
+  popSelSmart('fn-matricula', DB, 'matricula', 'Matrícula',    base.filter(a=>(!tSel||a.turma===tSel)&&(!pgSel||a.pagto===pgSel)));
   let d = base;
   if(tSel) d=d.filter(a=>a.turma===tSel);
   if(pgSel) d=d.filter(a=>a.pagto===pgSel);
+  if(mSel) d=d.filter(a=>a.matricula===mSel);
   document.getElementById('fn-cnt').textContent = d.length+' aluno'+(d.length!==1?'s':'');
 
   const rec=sum(d,x=>x.valor);
@@ -1762,6 +1784,7 @@ const L_COLS=[
   {k:'nome',l:'Nome'},
   {k:'_acoes',l:'Ações'},
   {k:'ra',l:'RA'},
+  {k:'matricula',l:'Matrícula'},
   {k:'status',l:'Status'},
   {k:'turma',l:'Turma'},
   {k:'periodo',l:'Período'},
@@ -1795,6 +1818,7 @@ function filtrarLista(){
   const p=document.getElementById('l-period').value;
   const pr=document.getElementById('l-prof').value;
   const pg=document.getElementById('l-pagto').value;
+  const mt=document.getElementById('l-matricula').value;
 
   // Base filtrada por status e busca (sem filtros de campo)
   const base=DB.filter(a=>{
@@ -1804,21 +1828,24 @@ function filtrarLista(){
   });
 
   // Para cada select, o contexto é a base filtrada pelos OUTROS campos selecionados
-  const ctxTurma  = base.filter(a=>(!p||a.periodo===p)&&(!pr||a.professor===pr)&&(!pg||a.pagto===pg));
-  const ctxPeriod = base.filter(a=>(!t||a.turma===t)&&(!pr||a.professor===pr)&&(!pg||a.pagto===pg));
-  const ctxProf   = base.filter(a=>(!t||a.turma===t)&&(!p||a.periodo===p)&&(!pg||a.pagto===pg));
-  const ctxPagto  = base.filter(a=>(!t||a.turma===t)&&(!p||a.periodo===p)&&(!pr||a.professor===pr));
+  const ctxTurma  = base.filter(a=>(!p||a.periodo===p)&&(!pr||a.professor===pr)&&(!pg||a.pagto===pg)&&(!mt||a.matricula===mt));
+  const ctxPeriod = base.filter(a=>(!t||a.turma===t)&&(!pr||a.professor===pr)&&(!pg||a.pagto===pg)&&(!mt||a.matricula===mt));
+  const ctxProf   = base.filter(a=>(!t||a.turma===t)&&(!p||a.periodo===p)&&(!pg||a.pagto===pg)&&(!mt||a.matricula===mt));
+  const ctxPagto  = base.filter(a=>(!t||a.turma===t)&&(!p||a.periodo===p)&&(!pr||a.professor===pr)&&(!mt||a.matricula===mt));
+  const ctxMat    = base.filter(a=>(!t||a.turma===t)&&(!p||a.periodo===p)&&(!pr||a.professor===pr)&&(!pg||a.pagto===pg));
 
   popSelSmart('l-turma',  DB, 'turma',     'Turma',      ctxTurma);
   popSelSmart('l-period', DB, 'periodo',   'Período',    ctxPeriod);
   popSelSmart('l-prof',   DB, 'professor', 'Professor',  ctxProf);
   popSelSmart('l-pagto',  DB, 'pagto',     'Pagamento',  ctxPagto);
+  popSelSmart('l-matricula', DB, 'matricula', 'Matrícula', ctxMat);
 
   lFil=base.filter(a=>{
     if(t&&a.turma!==t) return false;
     if(p&&a.periodo!==p) return false;
     if(pr&&a.professor!==pr) return false;
     if(pg&&a.pagto!==pg) return false;
+    if(mt&&a.matricula!==mt) return false;
     return true;
   });
   renderLista();
@@ -1844,6 +1871,7 @@ function renderLista(){
           <button class="btn-acao btn-del" onclick="excluirAluno(${DB.indexOf(a)})" title="Excluir">✕</button>
         </td>
         <td style="font-size:10px;font-weight:700;color:var(--muted)">${a.ra||'—'}</td>
+        <td>${a.matricula||'—'}</td>
         <td>${stCh}</td>
         <td>${tCh}</td>
         <td>${a.periodo||'—'}</td>
@@ -1929,10 +1957,13 @@ function exportLista(){
 // ══════════════════════════════════════
 function buildIngresso(){
   const tSel = document.getElementById('i-turma').value;
+  const mSel = document.getElementById('i-matricula').value;
   const base = filtered('i-sw');
-  popSelSmart('i-turma', DB, 'turma', 'Todas as turmas', base);
+  popSelSmart('i-turma', DB, 'turma', 'Todas as turmas', base.filter(a=>!mSel||a.matricula===mSel));
+  popSelSmart('i-matricula', DB, 'matricula', 'Matrícula', base.filter(a=>!tSel||a.turma===tSel));
   let d = base;
   if(tSel) d=d.filter(a=>a.turma===tSel);
+  if(mSel) d=d.filter(a=>a.matricula===mSel);
   document.getElementById('i-cnt').textContent = d.length+' aluno'+(d.length!==1?'s':'');
   document.getElementById('cards-badge').textContent = d.length+' registros';
 
@@ -2022,14 +2053,17 @@ function filtrarContatos(){
   const q=(document.getElementById('c-q').value||'').toLowerCase().trim();
   const st=getSW('c-sw');
   const t=document.getElementById('c-turma').value;
+  const mt=document.getElementById('c-matricula').value;
   const base=DB.filter(a=>{
     if(st&&a.status!==st) return false;
     if(q&&!a.nome.toLowerCase().includes(q)&&!(a.resp1||'').toLowerCase().includes(q)&&!(a.resp2||'').toLowerCase().includes(q)) return false;
     return true;
   });
-  popSelSmart('c-turma', DB, 'turma', 'Turma', base);
+  popSelSmart('c-turma', DB, 'turma', 'Turma', base.filter(a=>!mt||a.matricula===mt));
+  popSelSmart('c-matricula', DB, 'matricula', 'Matrícula', base.filter(a=>!t||a.turma===t));
   cFil=base.filter(a=>{
     if(t&&a.turma!==t) return false;
+    if(mt&&a.matricula!==mt) return false;
     return true;
   });
   renderContatos();
@@ -2145,6 +2179,7 @@ function openModal(idx=-1){
   const set = (id, val) => { const el=document.getElementById(id); if(el) el.value = val||''; };
   set('f-nome',    a?.nome    || '');
   set('f-ra',      a?.ra      || '');
+  set('f-matricula', a?.matricula || '');
   set('f-status',  a?.status  || 'Ativo');
   popularSelectDinamico('f-turma', TURMAS_CAD.map(t=>t.nome), a?.turma||'');
   popularSelectDinamico('f-periodo', PERIODOS_CAD.map(p=>p.nome), a?.periodo||'');
@@ -2193,6 +2228,7 @@ function salvarAluno(){
   const a={
     nome,
     ra:document.getElementById('f-ra').value.trim(),
+    matricula:document.getElementById('f-matricula').value.trim(),
     numero:'',
     status:document.getElementById('f-status').value||'Ativo',
     turma:document.getElementById('f-turma').value,

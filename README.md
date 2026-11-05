@@ -13,6 +13,7 @@ supabase/schema.sql          → estrutura da tabela `alunos` + segurança (RLS)
 supabase/seed_alunos.sql     → carga inicial com os 232 registros já existentes
 supabase/schema_listas.sql   → tabelas de Turmas+Professor, Períodos e Formas
                                 de Pagamento (gerenciáveis em Configurações)
+supabase/add_matricula.sql   → adiciona o campo "Matrícula" à tabela `alunos`
 ```
 
 Este repositório é **privado** porque `supabase/seed_alunos.sql` contém dados
@@ -31,11 +32,13 @@ Estes passos usam o **SQL Editor** do painel do Supabase
    Depois, abra o app → **Configurações** e preencha o professor(a) de cada
    turma (a lista já vem com os 5 nomes de turma que o sistema usava, mas
    sem professor vinculado — isso não dá pra descobrir automaticamente).
-4. Em `Authentication → Users → Add user`, crie um usuário (e-mail + senha)
+4. Rode todo o conteúdo de `supabase/add_matricula.sql` (adiciona o campo
+   "Matrícula" usado no cadastro de aluno e como filtro em todas as abas).
+5. Em `Authentication → Users → Add user`, crie um usuário (e-mail + senha)
    para cada pessoa da equipe que vai acessar o sistema. É esse login que
    protege os dados — sem ele, ninguém consegue ler ou editar a tabela
    `alunos` (a RLS criada no passo 1 exige usuário autenticado).
-5. Em `Settings → API`, copie:
+6. Em `Settings → API`, copie:
    - **Project URL**
    - **anon / public key**
 
