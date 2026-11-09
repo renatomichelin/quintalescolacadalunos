@@ -356,6 +356,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
           <label class="form-label">Data de Início</label>
           <input class="form-input" id="f-inicio" type="date">
         </div>
+        <div class="form-group">
+          <label class="form-label">Data de Término</label>
+          <input class="form-input" id="f-termino" type="date">
+        </div>
         <div class="form-group span2"><div class="form-section">Financeiro</div></div>
         <div class="form-group">
           <label class="form-label">Valor Mensal (R$)</label>
@@ -1682,7 +1686,7 @@ function buildTurmas(){
 
   const pct=cnt(d,x=>x.professor);
   const ptm={};
-  d.forEach(a=>{if(!ptm[a.professor])ptm[a.professor]=new Set();ptm[a.professor].add(a.turma);});
+  d.forEach(a=>{const pk=a.professor||'—'; if(!ptm[pk])ptm[pk]=new Set(); ptm[pk].add(a.turma);});
   document.getElementById('prof-grid').innerHTML=Object.entries(pct).sort((a,b)=>b[1]-a[1]).map(([p,n])=>
     `<div class="prof-item"><div class="prof-av">${(p||'?')[0]}</div>
     <div><div class="prof-n">${p||'—'}</div><div class="prof-t">${[...ptm[p]].join(', ')}</div></div>
@@ -1795,6 +1799,7 @@ const L_COLS=[
   {k:'_nasc_str',l:'Nascimento'},
   {k:'_idade',l:'Idade'},
   {k:'_inicio_str',l:'Ingresso'},
+  {k:'_termino_str',l:'Término'},
   {k:'resp1',l:'Responsável 1'},
   {k:'email1',l:'E-mail'},
   {k:'fone',l:'Celular'},
@@ -1882,6 +1887,7 @@ function renderLista(){
         <td>${fmtDate(a.nasc)}</td>
         <td>${calcIdade(a._nasc)}</td>
         <td>${fmtDate(a.inicio)}</td>
+        <td>${fmtDate(a.termino)}</td>
         <td title="${a.resp1||''}">${(a.resp1||'—').substring(0,22)+((a.resp1||'').length>22?'…':'')}</td>
         <td title="${a.email1||''}">${(a.email1||'—').substring(0,20)+((a.email1||'').length>20?'…':'')}</td>
         <td>${a.fone||a.fone_res1||'—'}</td>
@@ -1905,6 +1911,7 @@ function sortL(ci){
     let va,vb;
     if(k==='_nasc_str') {va=a.nasc||'';vb=b.nasc||'';}
     else if(k==='_inicio_str') {va=a.inicio||'';vb=b.inicio||'';}
+    else if(k==='_termino_str') {va=a.termino||'';vb=b.termino||'';}
     else if(k==='_idade') {va=a._nasc?a._nasc.getTime():0;vb=b._nasc?b._nasc.getTime():0;}
     else {va=a[k]||'';vb=b[k]||'';}
     if(typeof va==='number') return (va-vb)*lSD;
@@ -1921,6 +1928,7 @@ function exportLista(){
       let v;
       if(c.k==='_nasc_str') v=fmtDate(a.nasc);
       else if(c.k==='_inicio_str') v=fmtDate(a.inicio);
+      else if(c.k==='_termino_str') v=fmtDate(a.termino);
       else if(c.k==='_idade') v=calcIdade(a._nasc);
       else v=a[c.k]??'';
       obj[c.l]=v===null||v===undefined?'':v;
@@ -2189,6 +2197,7 @@ function openModal(idx=-1){
   set('f-vcto',    a?.vcto    || '');
   set('f-nasc',    a?.nasc    || '');
   set('f-inicio',  a?.inicio  || '');
+  set('f-termino', a?.termino || '');
   set('f-resp1',   a?.resp1   || '');
   set('f-cpf',     maskCPF(a?.cpf   || ''));
   set('f-fone',    maskFone(a?.fone || ''));
@@ -2225,6 +2234,7 @@ function salvarAluno(){
   if(!nome){toast('Informe o nome do aluno','err');return;}
   const nasc=document.getElementById('f-nasc').value;
   const ini=document.getElementById('f-inicio')?document.getElementById('f-inicio').value:'';
+  const term=document.getElementById('f-termino')?document.getElementById('f-termino').value:'';
   const a={
     nome,
     ra:document.getElementById('f-ra').value.trim(),
@@ -2234,7 +2244,7 @@ function salvarAluno(){
     turma:document.getElementById('f-turma').value,
     periodo:document.getElementById('f-periodo').value,
     professor:document.getElementById('f-prof').value,
-    nasc:nasc||null, inicio:ini||null, termino:null,
+    nasc:nasc||null, inicio:ini||null, termino:term||null,
     pagto:document.getElementById('f-pagto').value,
     vcto:parseInt(document.getElementById('f-vcto').value)||null,
     valor:parseFloat(document.getElementById('f-valor').value)||0,
@@ -2251,7 +2261,7 @@ function salvarAluno(){
   };
   a._nasc=nasc?new Date(nasc+'T12:00:00'):null;
   a._inicio=ini?new Date(ini+'T12:00:00'):null;
-  a._termino=null;
+  a._termino=term?new Date(term+'T12:00:00'):null;
   if(_editIdx >= 0 && _editIdx < DB.length){
     const orig = DB[_editIdx];
     const updated = {...orig, ...a};
